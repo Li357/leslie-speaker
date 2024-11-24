@@ -2,6 +2,8 @@
 
 #include "stm32f7.h"
 
+#define ADC_MAX         (4096)
+
 #define ADC_CR1_EOCIE   (1UL << 5)
 
 #define ADC_CR2_ADON    (1UL << 0)
