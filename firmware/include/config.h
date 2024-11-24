@@ -31,7 +31,3 @@
 #define APB1_CLOCK (SYS_CLOCK / 4)
 #define APB2_CLOCK (SYS_CLOCK / 2)
 #define AHB_CLOCK  SYS_CLOCK
-
-/* Pin definitions for peripherals */
-#define DAC_OUT1 PIN('A', 4)
-#define DAC_OUT2 PIN('A', 5)

@@ -20,6 +20,9 @@
 #define RCC_AHB1ENR_ETHMACTXEN (1UL << 26)
 #define RCC_AHB1ENR_ETHMACEN   (1UL << 25)
 #define RCC_APB2ENR_SYSCFGEN   (1UL << 14)
+#define RCC_APB2ENR_ADC1EN     (1UL << 8)
+#define RCC_APB2ENR_ADC2EN     (1UL << 9)
+#define RCC_APB2ENR_ADC3EN     (1UL << 10)
 #define RCC_AHB1RSTR_ETHMACRST (1UL << 25)
 #define RCC_APB1ENR_DACEN      (1UL << 29)
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "stm32f7.h"
-
 #define IRQINDEX(irq)   ((irq) >> 5)
 #define IRQBIT(irq)     (1UL << ((irq) & 0x1FUL))
 #define IRQPRINDEX(irq) ((irq) >> 2)
