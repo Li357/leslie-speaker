@@ -4,13 +4,15 @@
 
 #define ADC_MAX         (4096)
 
+#define ADC_SQR1_L      (20)
+
+#define ADC_CR1_SCAN    (1UL << 8)
 #define ADC_CR1_EOCIE   (1UL << 5)
 
 #define ADC_CR2_ADON    (1UL << 0)
 #define ADC_CR2_SWSTART (1UL << 30)
 #define ADC_CR2_CONT    (1UL << 1)
-
-#define ADC_SAMPLE_480  (0b111)
+#define ADC_CR2_EOCS    (1UL << 10)
 
 typedef volatile struct {
   uint32_t SR;
@@ -41,10 +43,22 @@ typedef volatile struct {
   uint32_t CDR;
 } adc_common_reg_t;
 
+typedef enum {
+  ADC_3_CYCLES,
+  ADC_15_CYCLES,
+  ADC_28_CYCLES,
+  ADC_56_CYCLES,
+  ADC_84_CYCLES,
+  ADC_112_CYCLES,
+  ADC_144_CYCLES,
+  ADC_480_CYCLES,
+} adc_sample_rate_t;
+
 #define ADC1 ((adc_reg_t *)ADC_BASE)
 #define ADC2 ((adc_reg_t *)(ADC_BASE + 0x100UL))
 #define ADC3 ((adc_reg_t *)(ADC_BASE + 0x200UL))
 #define ADC  ((adc_common_reg_t *)(ADC_BASE + 0x300UL))
 
 void adc_init(adc_reg_t *adc);
-void adc_start(adc_reg_t *adc, uint32_t channel);
+void adc_config_channel(adc_reg_t *adc, uint32_t channel, adc_sample_rate_t sampleRate);
+void adc_start(adc_reg_t *adc);

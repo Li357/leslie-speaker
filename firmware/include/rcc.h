@@ -23,6 +23,8 @@
 #define RCC_APB2ENR_ADC1EN     (1UL << 8)
 #define RCC_APB2ENR_ADC2EN     (1UL << 9)
 #define RCC_APB2ENR_ADC3EN     (1UL << 10)
+#define RCC_APB2ENR_TIM1EN     (1UL << 0)
+#define RCC_APB2ENR_TIM8EN     (1UL << 1)
 #define RCC_AHB1RSTR_ETHMACRST (1UL << 25)
 #define RCC_APB1ENR_DACEN      (1UL << 29)
 
