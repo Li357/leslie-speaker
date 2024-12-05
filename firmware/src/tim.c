@@ -22,7 +22,7 @@ void tim_adv_pwm_start(tim_adv_reg_t *tim) {
 }
 
 void tim_init(tim_reg_t *tim) {
-  TIM3->CR1 &= ~1;
+  //  TIM3->CR1 &= ~1;
   TIM4->CR1 &= ~1;
   RCC->APB1ENR |= (1 << 2) | (1 << 1);
 
@@ -34,7 +34,7 @@ void tim_init(tim_reg_t *tim) {
   RCC->APB1RSTR |= (1 << 2) | (1 << 1);
   RCC->APB1RSTR &= ~((1 << 2) | (1 << 1));
 
-  TIM3->CR1 |= (1 << 7);
+  // TIM3->CR1 |= (1 << 7);
   TIM4->CR1 |= (1 << 7);
   TIM4->PSC = 9;
   TIM4->ARR = 999;  // 1
@@ -42,9 +42,10 @@ void tim_init(tim_reg_t *tim) {
   TIM4->DIER |= 1;
   TIM4->CR1 |= 1;
 
+  /*
   TIM3->PSC = 19;
   TIM3->ARR = 19;
   TIM3->EGR |= 1;
   TIM3->DIER |= 1;
-  TIM3->CR1 |= 1;
+  TIM3->CR1 |= 1;*/
 }

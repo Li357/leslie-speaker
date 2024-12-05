@@ -9,16 +9,21 @@
 #include "usart.h"
 #include "util.h"
 
-#define ADC_IN3  PIN('A', 3)  // A0 motor speed CV
-#define ADC_IN10 PIN('C', 0)  // A1 coil 1 sense
-#define ADC_IN13 PIN('C', 3)  // A2 coil 2 sense
+// see ST MB1137 for ST Zio connectors to GPIO pins for Nucleo-144 boards
 
-#define COIL1_HA PIN('D', 6)  // D52 coil 1 HA, LB logic
-#define COIL1_LA PIN('D', 5)
-#define COIL1_HB PIN('D', 4)
-#define COIL1_LB PIN('D', 3)  // D53 coil 1 HB, LA logic
-// #define COIL2_HALB          PIN('D', 4)  // D54
-// #define COIL2_HBLA          PIN('D', 3)  // D55
+#define ADC_IN3             PIN('A', 3)  // motor speed CV
+#define ADC_IN10            PIN('C', 0)  // coil 1 sense
+#define ADC_IN13            PIN('C', 3)  // coil 2 sense
+
+#define COIL1_HA            PIN('D', 6)  // these are chosen to be in the same
+#define COIL1_LA            PIN('D', 5)  // GPIO bank for easy multiple assignment
+#define COIL1_HB            PIN('D', 4)
+#define COIL1_LB            PIN('D', 3)
+
+#define COIL2_HA            PIN('E', 10)  // same story here
+#define COIL2_LA            PIN('E', 12)
+#define COIL2_HB            PIN('E', 14)
+#define COIL2_LB            PIN('E', 15)
 
 #define MAX_RPM             (450.0f)
 #define STEPS_PER_REV       (200)
@@ -26,6 +31,7 @@
 #define STEPS               (4 * MICROSTEPS)
 
 #define SPEED_UPDATE_MARGIN (50)
+#define COIL_MARGIN         (10)
 
 /*static uint32_t SETPOINTS[STEPS] = {
     4095, 4085, 4055, 4006, 3939, 3853, 3749, 3630, 3495, 3346, 3185, 3012, 2831, 2641, 2446, 2248,
@@ -41,22 +47,23 @@ static uint32_t SETPOINTS[STEPS] = {185, 184, 183, 181, 177, 174, 169, 164, 157,
                                     127, 136, 143, 151, 157, 164, 169, 174, 177, 181, 183, 184};
 static uint32_t index            = 0;
 static uint32_t setpoints[2]     = {0, 0};
-static uint32_t adcSpeed         = 0;
-static uint16_t adcBuf[3]        = {0};
+// Both coils start with 0 current, so we need to charge them both up to their setpoints
+static bool charging[2] = {true, true};
+
+enum { MOTOR_CV, COIL1_SENSE, COIL2_SENSE };
+static uint16_t adcBuf[3] = {0};
 
 int calculateTimerReload(uint32_t adc) {
   return ((float)(ADC_MAX - adc) / ADC_MAX) * (40000 - 2) + 2;
 }
 
-static bool charging = true;
-
 void deadtime() {
-  asm(".rept 50 ; nop ; .endr");
+  asm(".rept 50; nop; .endr");
 }
 
 int main() {
   enable_fpu();
-  systick_init(SYS_CLOCK / 100000);  // count 10us
+  systick_init(SYS_CLOCK / (10E6 / 10));  // count 10us
 
   // dac_init(DAC_CH1 | DAC_CH2);
   dma_init();
@@ -86,22 +93,22 @@ int main() {
   gpio_pin_init((PIN('B', 7)), GPIO_OUTPUT, GPIO_PUSHPULL, GPIO_MEDSPEED, GPIO_PD);
 
   tim_init(TIM4);
+
   GPIO(PINBANK(COIL1_HB))->ODR &= ~(1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
   deadtime();
   GPIO(PINBANK(COIL1_HA))->ODR |= (1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));
-  /*
-  GPIO(PINBANK(COIL1_HA))->ODR &= ~(1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));
-  deadtime();
-  GPIO(PINBANK(COIL1_HB))->ODR |= (1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
 
-  GPIO(PINBANK(COIL1_HB))->ODR &= ~(1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
+  GPIO(PINBANK(COIL2_HB))->ODR &= ~(1 << PINNUM(COIL2_HB) | 1 << PINNUM(COIL2_LA));
   deadtime();
-  GPIO(PINBANK(COIL1_HA))->ODR |= (1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));*/
+  GPIO(PINBANK(COIL2_HA))->ODR |= (1 << PINNUM(COIL2_HA) | 1 << PINNUM(COIL2_LB));
 
+  // here so that python program can sync and read ADC values correctly aligned to 2-byte boundaries
   char sync[4] = {0x55, 0xBB, 0x55, 0xBB};
   usart_transmit(USART3, sync, 4);
 
+  // ADC DMA must be initialized before ADC is initialized
   adc_start(ADC1);
+
   while (true) {
     // Motor speed control hysteresis
     /*if (ABS(adcSpeed - lastSpeed) > SPEED_UPDATE_MARGIN) {
@@ -112,22 +119,32 @@ int main() {
       TIM4->CR1 |= 1;
     }*/
 
-    usart_transmit(USART3, (char *)&adcBuf[0], 2);
-    usart_transmit(USART3, (char *)&adcBuf[1], 2);
-    usart_transmit(USART3, (char *)&adcBuf[2], 2);
-    //   usart_transmit(USART3, txt, 5);
+    usart_transmit(USART3, (char *)&adcBuf[MOTOR_CV], 2);
+    usart_transmit(USART3, (char *)&adcBuf[COIL1_SENSE], 2);
+    usart_transmit(USART3, (char *)&adcBuf[COIL2_SENSE], 2);
 
-    // if current increasing above setpoint
-    if (charging && adcSpeed > setpoints[0] + 10) {
+    if (charging[0] && adcBuf[COIL1_SENSE] > setpoints[0] + COIL_MARGIN) {
       GPIO(PINBANK(COIL1_HA))->ODR &= ~(1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));
-      charging = false;
+      charging[0] = false;
       deadtime();
       GPIO(PINBANK(COIL1_HB))->ODR |= (1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
-    } else if (!charging && adcSpeed < setpoints[0] - 10) {
+    } else if (!charging[0] && adcBuf[COIL1_SENSE] < setpoints[0] - COIL_MARGIN) {
       GPIO(PINBANK(COIL1_HB))->ODR &= ~(1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
-      charging = true;
+      charging[0] = true;
       deadtime();
       GPIO(PINBANK(COIL1_HA))->ODR |= (1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));
+    }
+
+    if (charging[1] && adcBuf[COIL2_SENSE] > setpoints[1] + COIL_MARGIN) {
+      GPIO(PINBANK(COIL2_HA))->ODR &= ~(1 << PINNUM(COIL2_HA) | 1 << PINNUM(COIL2_LB));
+      charging[1] = false;
+      deadtime();
+      GPIO(PINBANK(COIL2_HB))->ODR |= (1 << PINNUM(COIL2_HB) | 1 << PINNUM(COIL2_LA));
+    } else if (!charging[1] && adcBuf[COIL1_SENSE] < setpoints[1] - COIL_MARGIN) {
+      GPIO(PINBANK(COIL2_HB))->ODR &= ~(1 << PINNUM(COIL2_HB) | 1 << PINNUM(COIL2_LA));
+      charging[1] = true;
+      deadtime();
+      GPIO(PINBANK(COIL2_HA))->ODR |= (1 << PINNUM(COIL2_HA) | 1 << PINNUM(COIL2_LB));
     }
   }
 
@@ -143,20 +160,3 @@ void _tim4_handler() {
   }
 }
 
-/*void _adc_handler() {
-  usart_transmit(USART3, (char *)&adcBuf[0], 4);
-  usart_transmit(USART3, (char *)&adcBuf[1], 4);
-  usart_transmit(USART3, (char *)&adcBuf[2], 4);
-}*/
-
-/*void _tim3_handler() {
-  if (TIM3->SR & 1) {
-    TIM3->SR &= ~1;
-    if (charging) {
-      curr += 10;
-    } else {
-      curr -= 10;
-    }
-    dac_set(curr > 4095 ? 4095 : (curr < 0 ? 0 : curr), 0);
-  }
-}*/
