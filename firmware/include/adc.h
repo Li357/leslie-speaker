@@ -13,6 +13,8 @@
 #define ADC_CR2_SWSTART (1UL << 30)
 #define ADC_CR2_CONT    (1UL << 1)
 #define ADC_CR2_EOCS    (1UL << 10)
+#define ADC_CR2_DMA     (1UL << 8)
+#define ADC_CR2_DDS     (1UL << 9)
 
 typedef volatile struct {
   uint32_t SR;
@@ -62,3 +64,5 @@ typedef enum {
 void adc_init(adc_reg_t *adc);
 void adc_config_channel(adc_reg_t *adc, uint32_t channel, adc_sample_rate_t sampleRate);
 void adc_start(adc_reg_t *adc);
+void adc_dma_init(adc_reg_t *adc, uint16_t *ptr, uint16_t len);
+void dma_init();

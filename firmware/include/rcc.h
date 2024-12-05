@@ -27,6 +27,7 @@
 #define RCC_APB2ENR_TIM8EN     (1UL << 1)
 #define RCC_AHB1RSTR_ETHMACRST (1UL << 25)
 #define RCC_APB1ENR_DACEN      (1UL << 29)
+#define RCC_AHB1ENR_DMA2EN     (1UL << 22)
 
 typedef volatile struct {
   uint32_t CR;

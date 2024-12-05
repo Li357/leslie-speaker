@@ -42,6 +42,7 @@ static uint32_t SETPOINTS[STEPS] = {185, 184, 183, 181, 177, 174, 169, 164, 157,
 static uint32_t index            = 0;
 static uint32_t setpoints[2]     = {0, 0};
 static uint32_t adcSpeed         = 0;
+static uint16_t adcBuf[3]        = {0};
 
 int calculateTimerReload(uint32_t adc) {
   return ((float)(ADC_MAX - adc) / ADC_MAX) * (40000 - 2) + 2;
@@ -58,6 +59,7 @@ int main() {
   systick_init(SYS_CLOCK / 100000);  // count 10us
 
   // dac_init(DAC_CH1 | DAC_CH2);
+  dma_init();
   adc_init(ADC1);
   delay(10);  // ADC needs some calibration time
 
@@ -75,13 +77,13 @@ int main() {
   gpio_pin_init(PIN('A', 4), GPIO_ANALOG, GPIO_PUSHPULL, GPIO_MEDSPEED, GPIO_PU);
   gpio_pin_init(PIN('A', 5), GPIO_ANALOG, GPIO_PUSHPULL, GPIO_MEDSPEED, GPIO_PU);
 
-  adc_config_channel(ADC1, 3, ADC_480_CYCLES);
+  adc_config_channel(ADC1, 3, ADC_28_CYCLES);
   adc_config_channel(ADC1, 10, ADC_28_CYCLES);
   adc_config_channel(ADC1, 13, ADC_28_CYCLES);
 
-  gpio_pin_init((PIN('B', 7)), GPIO_OUTPUT, GPIO_PUSHPULL, GPIO_MEDSPEED, GPIO_PD);
+  adc_dma_init(ADC1, adcBuf, 3);
 
-  adc_start(ADC1);
+  gpio_pin_init((PIN('B', 7)), GPIO_OUTPUT, GPIO_PUSHPULL, GPIO_MEDSPEED, GPIO_PD);
 
   tim_init(TIM4);
   GPIO(PINBANK(COIL1_HB))->ODR &= ~(1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
@@ -99,6 +101,7 @@ int main() {
   char sync[4] = {0x55, 0xBB, 0x55, 0xBB};
   usart_transmit(USART3, sync, 4);
 
+  adc_start(ADC1);
   while (true) {
     // Motor speed control hysteresis
     /*if (ABS(adcSpeed - lastSpeed) > SPEED_UPDATE_MARGIN) {
@@ -109,7 +112,9 @@ int main() {
       TIM4->CR1 |= 1;
     }*/
 
-    usart_transmit(USART3, (char *)&adcSpeed, 4);
+    usart_transmit(USART3, (char *)&adcBuf[0], 2);
+    usart_transmit(USART3, (char *)&adcBuf[1], 2);
+    usart_transmit(USART3, (char *)&adcBuf[2], 2);
     //   usart_transmit(USART3, txt, 5);
 
     // if current increasing above setpoint
@@ -132,22 +137,17 @@ int main() {
 void _tim4_handler() {
   if (TIM4->SR & 1) {
     TIM4->SR &= ~1;
-    setpoints[0] = SETPOINTS[(index + STEPS / 4) & 0x3F];
-    setpoints[1] = SETPOINTS[index];
-    index        = (index + 1) & 0x3F;
-    // usart_transmit(USART3, test, 4);
-    // dac_set(setpoints[0], setpoints[1]);
+    setpoints[0] = SETPOINTS[(index + STEPS / 4) % STEPS];
+    setpoints[1] = SETPOINTS[index % STEPS];
+    index        = (index + 1) % STEPS;
   }
-  /*if (charging) {
-    curr++;
-  } else {
-    curr--;
-  }*/
 }
 
-void _adc_handler() {
-  adcSpeed = ADC1->DR;
-}
+/*void _adc_handler() {
+  usart_transmit(USART3, (char *)&adcBuf[0], 4);
+  usart_transmit(USART3, (char *)&adcBuf[1], 4);
+  usart_transmit(USART3, (char *)&adcBuf[2], 4);
+}*/
 
 /*void _tim3_handler() {
   if (TIM3->SR & 1) {
