@@ -16,7 +16,10 @@ void _system_init() {
 
   // Set peripheral bus prescalers
   RCC->CFGR &= ~(RCC_CFGR_PPRE2 | RCC_CFGR_PPRE1 | RCC_CFGR_HPRE);
+  RCC->CFGR |= (0b10 << 0);
   RCC->CFGR |= APB1_PRE << RCC_CFGR_PPRE1SHIFT;
   RCC->CFGR |= APB2_PRE << RCC_CFGR_PPRE2SHIFT;
   RCC->CFGR |= AHB_PRE << RCC_CFGR_HPRESHIFT;
+
+  while ((RCC->CFGR & 0b1100) >> 2 != 0b10) {}
 }

@@ -14,10 +14,11 @@
  * of 3 wait states
  */
 
-#define PLL_M         (16)
-#define PLL_N         (200)
-#define PLL_P         (2)
-#define SYS_CLOCK     (BASE_CLOCK / PLL_M * PLL_N / PLL_P)
+#define PLL_M         (8)
+#define PLL_N         (100)
+#define PLL_P         (0)  // 2
+#define PLL_P_ACTUAL  (2)
+#define SYS_CLOCK     (BASE_CLOCK / PLL_M * PLL_N / PLL_P_ACTUAL)
 #define FLASH_LATENCY (3)
 
 /*
