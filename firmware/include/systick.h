@@ -13,6 +13,8 @@ typedef volatile struct {
   uint32_t CALIB;
 } systick_reg_t;
 
+extern volatile uint32_t _systicks;
+
 #define SYST ((systick_reg_t *)SYST_BASE)
 
 void systick_init(uint32_t ticks);

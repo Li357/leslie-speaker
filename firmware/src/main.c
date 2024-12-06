@@ -40,15 +40,21 @@
     2047, 2248, 2446, 2641, 2831, 3012, 3185, 3346, 3495, 3630, 3749, 3853, 3939, 4006, 4055, 4085,
 };*/
 
-static uint32_t SETPOINTS[STEPS] = {185, 184, 183, 181, 177, 174, 169, 164, 157, 151, 143, 136, 127,
-                                    119, 110, 101, 92,  83,  74,  65,  57,  48,  41,  33,  27,  20,
-                                    15,  10,  7,   3,   1,   0,   0,   0,   1,   3,   7,   10,  15,
-                                    20,  27,  33,  41,  48,  57,  65,  74,  83,  92,  101, 110, 119,
-                                    127, 136, 143, 151, 157, 164, 169, 174, 177, 181, 183, 184};
-static uint32_t index            = 0;
-static uint32_t setpoints[2]     = {0, 0};
+/*static uint32_t SETPOINTS[STEPS] = {185, 184, 183, 181, 177, 174, 169, 164, 157, 151, 143, 136,
+   127, 119, 110, 101, 92,  83,  74,  65,  57,  48,  41,  33,  27,  20, 15,  10,  7,   3,   1,   0,
+   0,   0,   1,   3,   7,   10,  15, 20,  27,  33,  41,  48,  57,  65,  74,  83,  92,  101, 110,
+   119, 127, 136, 143, 151, 157, 164, 169, 174, 177, 181, 183, 184};*/
+
+static uint32_t SETPOINTS[STEPS] = {
+    100,  99,  98,  95,  92,  88,  83,  77,  70,  63,  55,  47,  38,  29,  19,  9,
+    0,    -9,  -19, -29, -38, -47, -55, -63, -70, -77, -83, -88, -92, -95, -98, -99,
+    -100, -99, -98, -95, -92, -88, -83, -77, -70, -63, -55, -47, -38, -29, -19, -9,
+    0,    9,   19,  29,  38,  47,  55,  63,  70,  77,  83,  88,  92,  95,  98,  99};
+// static volatile int index    = 0;
+static uint32_t setpoints[2] = {0, 0};
 // Both coils start with 0 current, so we need to charge them both up to their setpoints
 static bool charging[2] = {true, true};
+static bool crossed[2]  = {false, false};
 
 enum { MOTOR_CV, COIL1_SENSE, COIL2_SENSE };
 static uint16_t adcBuf[3] = {0};
@@ -65,7 +71,7 @@ int main() {
   enable_fpu();
   systick_init(SYS_CLOCK / (10E6 / 10));  // count 10us
 
-  // dac_init(DAC_CH1 | DAC_CH2);
+  dac_init(DAC_CH1 | DAC_CH2);
   dma_init();
   adc_init(ADC1);
   delay(10);  // ADC needs some calibration time
@@ -80,6 +86,11 @@ int main() {
   gpio_pin_init(COIL1_LB, GPIO_OUTPUT, GPIO_PUSHPULL, GPIO_VHIGHSPEED, GPIO_PD);
   gpio_pin_init(COIL1_HB, GPIO_OUTPUT, GPIO_PUSHPULL, GPIO_VHIGHSPEED, GPIO_PD);
   gpio_pin_init(COIL1_LA, GPIO_OUTPUT, GPIO_PUSHPULL, GPIO_VHIGHSPEED, GPIO_PD);
+
+  gpio_pin_init(COIL2_HA, GPIO_OUTPUT, GPIO_PUSHPULL, GPIO_VHIGHSPEED, GPIO_PD);
+  gpio_pin_init(COIL2_LB, GPIO_OUTPUT, GPIO_PUSHPULL, GPIO_VHIGHSPEED, GPIO_PD);
+  gpio_pin_init(COIL2_HB, GPIO_OUTPUT, GPIO_PUSHPULL, GPIO_VHIGHSPEED, GPIO_PD);
+  gpio_pin_init(COIL2_LA, GPIO_OUTPUT, GPIO_PUSHPULL, GPIO_VHIGHSPEED, GPIO_PD);
 
   gpio_pin_init(PIN('A', 4), GPIO_ANALOG, GPIO_PUSHPULL, GPIO_MEDSPEED, GPIO_PU);
   gpio_pin_init(PIN('A', 5), GPIO_ANALOG, GPIO_PUSHPULL, GPIO_MEDSPEED, GPIO_PU);
@@ -109,6 +120,10 @@ int main() {
   // ADC DMA must be initialized before ADC is initialized
   adc_start(ADC1);
 
+  // SYST->CSR |= SYST_CSR_ENABLE;
+
+  // char *end = "\n";
+
   while (true) {
     // Motor speed control hysteresis
     /*if (ABS(adcSpeed - lastSpeed) > SPEED_UPDATE_MARGIN) {
@@ -119,44 +134,85 @@ int main() {
       TIM4->CR1 |= 1;
     }*/
 
+    // usart_transmit(USART3, (char *)&setpoints[0], 4);
     usart_transmit(USART3, (char *)&adcBuf[MOTOR_CV], 2);
     usart_transmit(USART3, (char *)&adcBuf[COIL1_SENSE], 2);
     usart_transmit(USART3, (char *)&adcBuf[COIL2_SENSE], 2);
 
-    if (charging[0] && adcBuf[COIL1_SENSE] > setpoints[0] + COIL_MARGIN) {
-      GPIO(PINBANK(COIL1_HA))->ODR &= ~(1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));
-      charging[0] = false;
-      deadtime();
-      GPIO(PINBANK(COIL1_HB))->ODR |= (1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
-    } else if (!charging[0] && adcBuf[COIL1_SENSE] < setpoints[0] - COIL_MARGIN) {
-      GPIO(PINBANK(COIL1_HB))->ODR &= ~(1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
-      charging[0] = true;
-      deadtime();
-      GPIO(PINBANK(COIL1_HA))->ODR |= (1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));
+    if (setpoints[0] >= 0) {
+      if (charging[0] && adcBuf[COIL1_SENSE] > setpoints[0] + COIL_MARGIN) {
+        GPIO(PINBANK(COIL1_HA))->ODR &= ~(1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));
+        charging[0] = false;
+        deadtime();
+        GPIO(PINBANK(COIL1_HB))->ODR |= (1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
+      } else if (!charging[0] && (crossed[0] || adcBuf[COIL1_SENSE] < setpoints[0] - COIL_MARGIN)) {
+        GPIO(PINBANK(COIL1_HB))->ODR &= ~(1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
+        crossed[0]  = false;
+        charging[0] = true;
+        deadtime();
+        GPIO(PINBANK(COIL1_HA))->ODR |= (1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));
+      }
+    } else {
+      if (!charging[0] && adcBuf[COIL1_SENSE] > ABS(setpoints[0]) + COIL_MARGIN) {
+        GPIO(PINBANK(COIL1_HB))->ODR &= ~(1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
+        charging[0] = true;
+        deadtime();
+        GPIO(PINBANK(COIL1_HA))->ODR |= (1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));
+      } else if (charging[0] &&
+                 (!crossed[0] || adcBuf[COIL1_SENSE] < ABS(setpoints[0]) - COIL_MARGIN)) {
+        GPIO(PINBANK(COIL1_HA))->ODR &= ~(1 << PINNUM(COIL1_HA) | 1 << PINNUM(COIL1_LB));
+        charging[0] = false;
+        crossed[0]  = true;
+        deadtime();
+        GPIO(PINBANK(COIL1_HB))->ODR |= (1 << PINNUM(COIL1_HB) | 1 << PINNUM(COIL1_LA));
+      }
     }
 
-    if (charging[1] && adcBuf[COIL2_SENSE] > setpoints[1] + COIL_MARGIN) {
-      GPIO(PINBANK(COIL2_HA))->ODR &= ~(1 << PINNUM(COIL2_HA) | 1 << PINNUM(COIL2_LB));
-      charging[1] = false;
-      deadtime();
-      GPIO(PINBANK(COIL2_HB))->ODR |= (1 << PINNUM(COIL2_HB) | 1 << PINNUM(COIL2_LA));
-    } else if (!charging[1] && adcBuf[COIL1_SENSE] < setpoints[1] - COIL_MARGIN) {
-      GPIO(PINBANK(COIL2_HB))->ODR &= ~(1 << PINNUM(COIL2_HB) | 1 << PINNUM(COIL2_LA));
-      charging[1] = true;
-      deadtime();
-      GPIO(PINBANK(COIL2_HA))->ODR |= (1 << PINNUM(COIL2_HA) | 1 << PINNUM(COIL2_LB));
+    if (setpoints[1] >= 0) {
+      if (charging[1] && adcBuf[COIL2_SENSE] > setpoints[1] + COIL_MARGIN) {
+        GPIO(PINBANK(COIL2_HA))->ODR &= ~(1 << PINNUM(COIL2_HA) | 1 << PINNUM(COIL2_LB));
+        charging[1] = false;
+        deadtime();
+        GPIO(PINBANK(COIL2_HB))->ODR |= (1 << PINNUM(COIL2_HB) | 1 << PINNUM(COIL2_LA));
+      } else if (!charging[1] && (crossed[1] || adcBuf[COIL2_SENSE] < setpoints[1] - COIL_MARGIN)) {
+        GPIO(PINBANK(COIL2_HB))->ODR &= ~(1 << PINNUM(COIL2_HB) | 1 << PINNUM(COIL2_LA));
+        crossed[1]  = false;
+        charging[1] = true;
+        deadtime();
+        GPIO(PINBANK(COIL2_HA))->ODR |= (1 << PINNUM(COIL2_HA) | 1 << PINNUM(COIL2_LB));
+      }
+    } else {
+      if (!charging[1] && adcBuf[COIL2_SENSE] > ABS(setpoints[1]) + COIL_MARGIN) {
+        GPIO(PINBANK(COIL2_HB))->ODR &= ~(1 << PINNUM(COIL2_HB) | 1 << PINNUM(COIL2_LA));
+        charging[1] = true;
+        deadtime();
+        GPIO(PINBANK(COIL2_HA))->ODR |= (1 << PINNUM(COIL2_HA) | 1 << PINNUM(COIL2_LB));
+      } else if (charging[1] &&
+                 (!crossed[1] || adcBuf[COIL2_SENSE] < ABS(setpoints[1]) - COIL_MARGIN)) {
+        GPIO(PINBANK(COIL2_HA))->ODR &= ~(1 << PINNUM(COIL2_HA) | 1 << PINNUM(COIL2_LB));
+        charging[1] = false;
+        crossed[1]  = true;
+        deadtime();
+        GPIO(PINBANK(COIL2_HB))->ODR |= (1 << PINNUM(COIL2_HB) | 1 << PINNUM(COIL2_LA));
+      }
     }
   }
 
   return 0;
 }
 
+static int i = 0;
 void _tim4_handler() {
   if (TIM4->SR & 1) {
+    // asm("cpsie i");
     TIM4->SR &= ~1;
-    setpoints[0] = SETPOINTS[(index + STEPS / 4) % STEPS];
-    setpoints[1] = SETPOINTS[index % STEPS];
-    index        = (index + 1) % STEPS;
+    setpoints[0] = SETPOINTS[(i + 16) % 64];
+    setpoints[1] = SETPOINTS[i];
+    i            = (i + 1) % 64;
+    // GPIO(PINBANK(COIL2_HA))->ODR ^= (1 << PINNUM(COIL2_HA));
+    dac_set(11 * setpoints[0] + 2048, 11 * setpoints[1] + 2048);
+    // usart_transmit(USART3, (char*)&cnt, 2);
+    // usart_transmit(USART3, end, 1);
+    // asm("cpsid i");
   }
 }
-

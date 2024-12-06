@@ -26,7 +26,7 @@ void tim_init(tim_reg_t *tim) {
   TIM4->CR1 &= ~1;
   RCC->APB1ENR |= (1 << 2) | (1 << 1);
 
-  nvic_set_priority(NVIC_IRQ_TIM4, 1);
+  nvic_set_priority(NVIC_IRQ_TIM4, 0);
   nvic_enable_irq(NVIC_IRQ_TIM4);
   // nvic_set_priority(NVIC_IRQ_TIM3, 3);
   // nvic_enable_irq(NVIC_IRQ_TIM3);
@@ -36,8 +36,8 @@ void tim_init(tim_reg_t *tim) {
 
   // TIM3->CR1 |= (1 << 7);
   TIM4->CR1 |= (1 << 7);
-  TIM4->PSC = 9;
-  TIM4->ARR = 999;  // 1
+  TIM4->PSC = 499;
+  TIM4->ARR = 29;  // 1
   TIM4->EGR |= 1;
   TIM4->DIER |= 1;
   TIM4->CR1 |= 1;

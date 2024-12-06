@@ -3,7 +3,7 @@
 #include "rcc.h"
 #include "scb.h"
 
-static volatile uint32_t _systicks;
+volatile uint32_t _systicks;
 
 void systick_init(uint32_t ticks) {
   // Enable SYSCFG for systick
